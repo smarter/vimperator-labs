@@ -1376,12 +1376,14 @@ const Buffer = Module("buffer", {
             };
         }
 
-        function generateTabs (tabs) {
+        function generateTabs (tabs, winIndex) {
             for (let i = 0, tab; tab = tabs[i]; i++) {
                 let indicator = getIndicator(tab) + (tab.pinned ? "@" : " "),
                     label = tab.label || UNTITLED_LABEL,
                     url = getURLFromTab(tab),
                     index = ((tab._tPos || i) + 1) + ": ";
+                if (winIndex != undefined)
+                    index = (winIndex + 1) + "/" + index;
                 let item = createItem(index, label, url, indicator, tab.image);
                 if (!tab.pinned && tab._tabViewTabItem && tab._tabViewTabItem.parent) {
                     let groupName = tab._tabViewTabItem.parent.getTitle();
@@ -1427,6 +1429,15 @@ const Buffer = Module("buffer", {
             if (flags & this.buffer.VISIBLE) {
                 context.title = ["Buffers"];
                 context.completions = [item for (item in generateTabs(tabs || config.tabbrowser.visibleTabs))];
+            }
+
+            let windows = Cc["@mozilla.org/appshell/window-mediator;1"]
+                .getService(Ci.nsIWindowMediator).getEnumerator("navigator:browser");
+            for (let i = 0; windows.hasMoreElements(); i++) {
+                let win = windows.getNext();
+                if (win == window || !win.gBrowser) continue;
+                context.completions = context.completions
+                    .concat([item for (item in generateTabs(win.gBrowser.tabs, i))]);
             }
 
             if (!liberator.has("tabgroup"))

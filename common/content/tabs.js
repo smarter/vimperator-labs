@@ -169,6 +169,17 @@ const Tabs = Module("tabs", {
             return config.tabbrowser.mCurrentTab;
     },
 
+    getTabWin: function (index, winIndex) {
+        let windows = Cc["@mozilla.org/appshell/window-mediator;1"]
+            .getService(Ci.nsIWindowMediator).getEnumerator("navigator:browser");
+        for (let i = 0; windows.hasMoreElements(); i++) {
+            let win = windows.getNext();
+            if (i != winIndex) continue;
+            win.focus();
+            return [[win.gBrowser.tabs[index]], win.gBrowser];
+        }
+    },
+
     /**
      * Lists all tabs matching <b>filter</b>.
      *
@@ -398,12 +409,20 @@ const Tabs = Module("tabs", {
             return [];
 
         if (buffer == "#")
-            return [tabs.alternate];
+            return [[tabs.alternate]];
 
-        let matches = buffer.match(/^(\d+):?/);
-        if (matches)
-            return [tabs.getTab(parseInt(matches[1], 10) - 1)];
-        else if (liberator.has("tabgroup")) {
+        let matches = buffer.match(/^(\d+)(?:\/(\d+))?:?/);
+        if (matches) {
+            let index, winIndex;
+            if (matches[2]) {
+                index = parseInt(matches[2], 10) - 1;
+                winIndex = parseInt(matches[1], 10) - 1;
+                return tabs.getTabWin(index, winIndex);
+            }
+            index = parseInt(matches[1], 10) - 1;
+            return [[tabs.getTab(index)]];
+        }
+        if (liberator.has("tabgroup")) {
             matches = buffer.match(/^(.+?)\.(\d+):?/);
             if (matches) {
                 let [, groupName, tabNum] = matches;
@@ -412,7 +431,7 @@ const Tabs = Module("tabs", {
                 if (group) {
                     let tabItem = group.getChild(tabNum - 1);
                     if (tabItem)
-                        return [tabItem.tab];
+                        return [[tabItem.tab]];
                 }
             }
         }
@@ -442,7 +461,7 @@ const Tabs = Module("tabs", {
                 matches.push(tabs.getTab(index));
         }
 
-        return matches;
+        return [matches];
     },
 
     /**
@@ -479,11 +498,13 @@ const Tabs = Module("tabs", {
         if (typeof reverse != "boolean")
             reverse = false;
 
-        let tabItems = tabs.getTabsFromBuffer(buffer);
+        let [tabItems, browser] = tabs.getTabsFromBuffer(buffer);
+        if (!browser)
+            browser = config.tabbrowser;
         if (tabItems.length == 0)
             liberator.echoerr("No matching buffer for: " + buffer);
         else if (tabItems.length == 1)
-            config.tabbrowser.mTabContainer.selectedItem = tabItems[0];
+            browser.mTabContainer.selectedItem = tabItems[0];
         else if (!allowNonUnique)
             liberator.echoerr("More than one match for: " + buffer);
         else {
@@ -496,7 +517,7 @@ const Tabs = Module("tabs", {
             else
                 index = count % length;
 
-            config.tabbrowser.mTabContainer.selectedItem = tabItems[index];
+            browser.mTabContainer.selectedItem = tabItems[index];
         }
     },
 
